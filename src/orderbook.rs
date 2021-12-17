@@ -13,6 +13,8 @@ use near_sdk::{
     PromiseIndex
 };
 
+use near_sdk::log;
+
 // use std::Vector;
 
 type BalanceMap = LookupMap<AccountId, u128>;
@@ -22,6 +24,7 @@ type PromiseIdxVec = Vector<PromiseIndex>;
 
 pub const A: bool = true;
 pub const B: bool = false;
+pub const EMPTY_PROMISE_CHAIN: u64 = 1_000_000_000;
 
 
 #[derive(Serialize, Deserialize)]
@@ -131,7 +134,8 @@ impl OrderBook {
 
         let mut promises = PromiseIdxVec::new(b"promises".to_vec());
 
-        let mut order_promise = Promise::new(env::current_account_id());
+        // let mut order_promise = Promise::new(env::current_account_id());
+        let mut order_promise = EMPTY_PROMISE_CHAIN;
 
         order.lock();
 
@@ -165,7 +169,10 @@ impl OrderBook {
 
                     let (mut order_m, promise) = table.get_level(price).pop(&order.id);
 
-                    order_promise = order_promise.and(promise);
+                    order_promise = match order_promise {
+                        EMPTY_PROMISE_CHAIN => promise.unwrap(),
+                        _ => env::promise_and(&[order_promise, promise.unwrap()])
+                    };
 
                     order_m.lock();
 
@@ -173,36 +180,30 @@ impl OrderBook {
                         &order_m.id,
                         &order_m
                     );
-
-                    // promises.push(&promise);
                 }
             }
         }
 
-        // let promise_unify = env::promise_and(&promises.try_into());
-
-        let promise_final = env::promise_then(
-            order_promise,
-            env::current_account_id(),
-            "finalize",
-            json!({"promise_idx": order_promise.})
-        );
-
-
-        if order.size > 0 {
-            // add remaining to book
+        if order_promise != EMPTY_PROMISE_CHAIN {
+            env::promise_then(
+                order_promise,
+                env::current_account_id(),
+                b"order_finalization",
+                json!({"id_t": order.id}).to_string().as_bytes(),
+                0,
+                5_000_000_000_000
+            );
         }
     }
 
-    pub fn merge_promise(promise_idx: PromiseIndex) {
+    pub fn order_finalization(&mut self, id_t: &u128) {
         assert!(env::current_account_id() == env::predecessor_account_id());
 
-        env::promise_result();
+        let taker_order = self.pending.get(&id_t).unwrap();
 
-        for p in self.prom
-
-
-        env::promise_result()
+        if taker_order.size > 0 {
+            log!("Order {} was filled partially. Remaining size {}", taker_order.id, taker_order.size);
+        }
     }
 
     pub fn on_execute(&mut self, id_t: &u128, id_m: &u128, status: bool) {

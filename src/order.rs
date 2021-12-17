@@ -75,22 +75,22 @@ impl LimitOrder {
         }
     }
 
-    pub fn execute_order(&mut self, id_t: &u128) -> Promise {
-
-        // env::promise_create(
-        //     self.callable.clone(),
-        //     b"execute",
-        //     json!({"id_m": self.id, "id_t": *id_t}).to_string().as_bytes(),
-        //     0,
-        //     5_000_000_000_000
-        // )
-        ext_callable::execute(
-            self.id,
-            *id_t,
-            &self.callable,
+    // pub fn execute_order(&mut self, id_t: &u128) -> Promise {
+    pub fn execute_order(&mut self, id_t: &u128) -> u64 {
+        env::promise_create(
+            self.callable.clone(),
+            b"execute",
+            json!({"id_m": self.id, "id_t": *id_t}).to_string().as_bytes(),
             0,
             5_000_000_000_000
         )
+        // ext_callable::execute(
+        //     self.id,
+        //     *id_t,
+        //     &self.callable,
+        //     0,
+        //     5_000_000_000_000
+        // )
     }
 
     pub fn lock(&mut self) {
