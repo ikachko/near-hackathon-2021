@@ -90,7 +90,7 @@ impl LimitOrder {
             &self.callable,
             0,
             5_000_000_000_000
-        ).unwrap()
+        )
     }
 
     pub fn lock(&mut self) {
