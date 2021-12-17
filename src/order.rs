@@ -50,7 +50,7 @@ impl LimitOrder {
         p: u128,
         sz: u128,
     ) -> Self {
-
+        let c_copy = c.clone();
         let hash = keccak256((
             c.clone()
             + &t.to_string()
@@ -63,7 +63,7 @@ impl LimitOrder {
             timestamp: t,
             address: signer_account_id(),
             id: u128::from_be_bytes(hash[..16].try_into().unwrap()),
-            callable: c,
+            callable: c_copy,
             side: sd,
             price: p,
             size: sz,
