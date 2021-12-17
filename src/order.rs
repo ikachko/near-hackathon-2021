@@ -36,7 +36,7 @@ impl LimitOrder {
     ) -> Self {
 
         let hash = keccak256((
-            c
+            c.clone()
             + &t.to_string()
             + &p.to_string() 
             + &sz.to_string()

@@ -28,7 +28,7 @@ impl LevelTable {
         if o.side != self.table_side {
             return;
         }
-        
+
         if !self.table.get(&o.price).unwrap().empty() {
             self.table.get(&o.price).unwrap().push(o);
         } else {

@@ -3,17 +3,21 @@ use near_sdk::json_types::{ValidAccountId, U128};
 
 use super::level_table::LevelTable;
 use super::order::{LimitOrder, BID, ASK};
-use near_sdk::collections::{LookupMap};
+use near_sdk::collections::{LookupMap, Vector};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, near_bindgen, AccountId, PromiseOrValue,
-    serde_json, BorshStorageKey
+    serde_json, BorshStorageKey, Promise
 
 };
 
+// use std::Vector;
+
 type BalanceMap = LookupMap<AccountId, u128>;
 type PendingMap = LookupMap<u128, LimitOrder>;
+type PromiseVec = Vector<Promise>;
+
 
 pub const A: bool = true;
 pub const B: bool = false;
@@ -102,6 +106,8 @@ impl OrderBook {
         let mut o = order.clone();
         let mut o_size = o.size;
 
+        let mut promises = PromiseVec::new(b"promises".to_vec());
+
         order.lock();
 
         level_range = match !order.side {
@@ -134,21 +140,41 @@ impl OrderBook {
 
                     let (mut order_m, promise) = table.get_level(price).pop(&order.id);
 
-                    
-
                     order_m.lock();
 
                     self.pending.insert(
                         &order_m.id,
                         &order_m
                     );
+
+                    promise.unwrap().
+                    promises.push(&promise.unwrap());
                 }
             }
         }
 
+        let promise_unify = env::promise_and(&promises);
+
+        let promise_final = env::promise_then(
+            promise_unify,
+            account_id.clone(),
+            "finalize",
+
+        )
+
+
         if order.size > 0 {
             // add remaining to book
         }
+    }
+
+    pub fn merge_promise(p_idxs: &Vector<u64>) {
+        assert!(env::current_account_id() == env::predecessor_account_id());
+
+        for p in self.prom
+
+
+        env::promise_result()
     }
 
     pub fn on_execute(&mut self, id_t: &u128, id_m: &u128, status: bool) {
