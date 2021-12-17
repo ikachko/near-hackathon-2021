@@ -1,25 +1,23 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::{near_bindgen, ext_contract};
-use near_sdk::env::{promise_return, promise_then, current_account_id};
-use near_sdk::AccountId;
-use near_sdk::env::signer_account_id;
-use std::option::Option;
+use near_sdk::{near_bindgen, ext_contract, AccountId, Promise};
+use near_sdk::env::{keccak256, signer_account_id};
+
 
 pub const BID: bool = true;
 pub const ASK: bool = false;
 
 #[ext_contract(ext_callable)]
 trait Callable {
-    fn execute() -> bool;
+    fn execute(id_m: u128, id_t: u128);
 }
 
 #[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize, Clone)]
 pub struct LimitOrder {
-    pub timestamp: i64,
-    pub address: AccountId,
-    pub callable: AccountId,
-    // pub id: u32,
+    pub timestamp: i128,
+    pub address: String,
+    pub callable: String,
+    pub id: u128,
     pub side: bool,
     pub price: u128,
     pub size: u128,
@@ -30,16 +28,25 @@ pub struct LimitOrder {
 #[near_bindgen]
 impl LimitOrder {
     pub fn new(
-        t: i64,
+        t: i128,
         c: AccountId,
         sd: bool,
         p: u128,
         sz: u128,
     ) -> Self {
 
+        let hash = keccak256((
+            c
+            + &t.to_string()
+            + &p.to_string() 
+            + &sz.to_string()
+            + &sd.to_string()
+        ).as_bytes());
+
         LimitOrder {
             timestamp: t,
             address: signer_account_id(),
+            id: u128::from_be_bytes(hash[..16].try_into().unwrap()),
             callable: c,
             side: sd,
             price: p,
@@ -49,21 +56,18 @@ impl LimitOrder {
         }
     }
 
-    pub fn execute_order(&mut self) -> bool {
-        let promise = ext_callable::execute(&self.callable, 0, 5_000_000_000_000);
-
-        let promise1 = promise_then(
-            promise,
-            current_account_id(),
-            "clear()",
-
-        );
-
-        promise_return(promise)
+    pub fn execute_order(&mut self, id_t: &u128) -> Promise {
+        ext_callable::execute(
+            self.id,
+            *id_t,
+            &self.callable, 
+            0, 
+            5_000_000_000_000
+        )
     }
 
-    pub fn on_execute(promise_result: bool) {
-
+    pub fn lock(&mut self) {
+        self.pending = true;
     }
 
     pub fn sub(&mut self, a: u128) {

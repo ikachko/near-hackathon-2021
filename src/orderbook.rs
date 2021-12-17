@@ -8,12 +8,16 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, near_bindgen, AccountId, PromiseOrValue,
-    serde_json,
+    serde_json, BorshStorageKey
 
 };
 
-type Balances = LookupMap<AccountId, (u128, u128)>;
-type Balance = LookupMap<AccountId, u128>;
+type BalanceMap = LookupMap<AccountId, u128>;
+type PendingMap = LookupMap<u128, LimitOrder>;
+
+pub const A: bool = true;
+pub const B: bool = false;
+
 
 #[derive(Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
@@ -24,16 +28,16 @@ pub enum FtOnTransferArgs {
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct OrderBook {
-    balances: Balances,
+    tokenA_balance: BalanceMap,
+    tokenB_balance: BalanceMap,
 
-    token1_balance: Balance,
-    token2_balance: Balance,
-
-    token1_id: AccountId,
-    token2_id: AccountId,
+    tokenA_id: AccountId,
+    tokenB_id: AccountId,
 
     bids: LevelTable,
     asks: LevelTable,
+
+    pending: PendingMap,
 
     max_bid: u128,
     min_bid: u128,
@@ -41,6 +45,25 @@ pub struct OrderBook {
     min_ask: u128,
 
 }
+
+pub struct Trade {
+    from: AccountId,
+    to: AccountId,
+    id_t: u128,
+    it_m: u128,
+    side: bool
+}
+
+#[derive(BorshSerialize, BorshStorageKey)]
+enum StorageKey {
+   AccountBalance,
+   LevelTableBid,
+   LevelTableAsk,
+   TokenABalance,
+   TokenBBalance,
+   Pending,
+}
+
 
 pub fn cmp(a: u128, b: u128, order: bool) -> bool {
     return match order {
@@ -50,15 +73,15 @@ pub fn cmp(a: u128, b: u128, order: bool) -> bool {
 }
 
 impl OrderBook {
-    pub fn new(token1: AccountId, token2: AccountId) -> Self {
+    pub fn new(tokenA: AccountId, tokenB: AccountId) -> Self {
         OrderBook {
-            balances: Balances::new(b"b".to_vec()),
-            token1_balance: Balance::new(b"b".to_vec()),
-            token2_balance: Balance::new(b"b".to_vec()),
-            token1_id: token1,
-            token2_id: token2,
+            tokenA_balance: BalanceMap::new(StorageKey::TokenABalance),
+            tokenB_balance: BalanceMap::new(StorageKey::TokenBBalance),
+            tokenA_id: tokenA,
+            tokenB_id: tokenB,
             bids: LevelTable::new(BID),
             asks: LevelTable::new(ASK),
+            pending: PendingMap::new(StorageKey::Pending),
             max_bid: 0,
             min_bid: 0,
             max_ask: 0,
@@ -76,6 +99,10 @@ impl OrderBook {
     ) {
         let level_range;
         let table;
+        let mut o = order.clone();
+        let mut o_size = o.size;
+
+        order.lock();
 
         level_range = match !order.side {
             BID => self.max_bid..=self.min_bid,
@@ -86,6 +113,8 @@ impl OrderBook {
             BID => &mut self.bids,
             ASK => &mut self.asks, 
         };
+
+        self.pending.insert(&o.id, &o);
         
         for price in level_range {
             if order.size == 0 {
@@ -99,11 +128,20 @@ impl OrderBook {
                     level_order.sub(order.size * price);
                     order.size = 0;
                 } else {
-                    order.size -= level_order.size * price;
-                    let out_order = table.get_level(price).pop().unwrap();
+                    let matched_size = level_order.size * price;
 
-                    // pending_orders.insert(id, out_order);
-                    out_order.execute_order();
+                    order.size -= matched_size;
+
+                    let (mut order_m, promise) = table.get_level(price).pop(&order.id);
+
+                    
+
+                    order_m.lock();
+
+                    self.pending.insert(
+                        &order_m.id,
+                        &order_m
+                    );
                 }
             }
         }
@@ -113,16 +151,64 @@ impl OrderBook {
         }
     }
 
-    pub fn async_fill(id) {
-        pending_orders.get(id).fill();
+    pub fn on_execute(&mut self, id_t: &u128, id_m: &u128, status: bool) {
+        let mut order_t = self.pending.get(&id_t).unwrap();
+        let order_m = self.pending.get(&id_m).unwrap();
+
+        if status {
+            let match_size = order_m.price * order_m.size;
+            // transfer tokenA from taker to maker
+            match order_t.side {
+                BID => {
+                    // Taker gives A to Maker
+                    self.internal_transfer(
+                        &order_t.address,
+                        &order_m.address,
+                        &order_m.size,
+                        A
+                    );
+                    // Maker gives B to Taker
+                    self.internal_transfer(
+                        &order_m.address,
+                        &order_t.address,
+                        &match_size,
+                        B
+                    );
+                },
+                ASK => {
+                    // Taker gives B to Maker
+                    self.internal_transfer(
+                        &order_t.address,
+                        &order_m.address,
+                        &order_m.size,
+                        A
+                    );
+                    // Maker gives A to Taker
+                    self.internal_transfer(
+                        &order_m.address,
+                        &order_t.address,
+                        &match_size,
+                        B
+                    );
+                }
+            }
+            order_t.size -= match_size;
+        }
+        self.pending.remove(&id_m);
     }
 
-    pub fn internal_transfer(&mut self, from: AccountId, to: AccountId, value: u128, side: bool) {
+    pub fn internal_transfer(
+        &mut self, 
+        from: &AccountId, 
+        to: &AccountId,
+        value: &u128, 
+        token: bool
+    ) {
         assert!(from != to);
 
-        let token_balance = match side {
-            BID => &mut self.token1_balance,
-            ASK => &mut self.token2_balance, 
+        let token_balance = match token {
+            A => &mut self.tokenA_balance,
+            B => &mut self.tokenB_balance, 
         };
 
             
@@ -136,12 +222,12 @@ impl OrderBook {
     pub fn internal_token_deposit(&mut self, sender: &AccountId, account_id: &AccountId, amount: u128) {
         let new_amount;
 
-        if *account_id == self.token1_id {
-            new_amount = self.token1_balance.get(&sender).unwrap_or(0) + amount;
-            self.token1_balance.insert(&sender, &new_amount);
+        if *account_id == self.tokenA_id {
+            new_amount = self.tokenA_balance.get(&sender).unwrap_or(0) + amount;
+            self.tokenA_balance.insert(&sender, &new_amount);
         } else {
-            new_amount = self.token2_balance.get(&sender).unwrap_or(0) + amount;
-            self.token2_balance.insert(&sender, &new_amount);
+            new_amount = self.tokenB_balance.get(&sender).unwrap_or(0) + amount;
+            self.tokenB_balance.insert(&sender, &new_amount);
         }
     }
 
@@ -171,7 +257,7 @@ impl FungibleTokenReceiver for OrderBook {
 
         assert!(
             (
-                (&self.token1_id == &token_account_id) || (&self.token2_id == &token_account_id)
+                (&self.tokenA_id == &token_account_id) || (&self.tokenB_id == &token_account_id)
             ),
             "{}",
             ERR_INVALID_FT_ACCOUNT_ID

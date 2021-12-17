@@ -3,16 +3,15 @@ use super::level::Level;
 use near_sdk::collections::UnorderedMap;
 
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-// use near_sdk::collections::Vector;
 use near_sdk::{env, near_bindgen};
 
 
-type Levels = UnorderedMap<u128, Level>;
+type LevelsMap = UnorderedMap<u128, Level>;
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct LevelTable {
-    pub table: Levels,
+    pub table: LevelsMap,
     table_side: bool
 }
 
@@ -20,7 +19,7 @@ pub struct LevelTable {
 impl LevelTable {
     pub fn new(side: bool) -> Self {
         LevelTable {
-            table: Levels::new(0),
+            table: LevelsMap::new(env::random_seed()),
             table_side: side, 
         }
     }
