@@ -33,13 +33,13 @@ impl Level {
         self.orders.push(&order)
     }
 
-    pub fn pop(&mut self, id_t: &u128) -> (LimitOrder, Option<Promise>) {
+    pub fn pop(&mut self, id_t: &u128) -> (LimitOrder, Promise) {
         let mut order = self.orders.pop().unwrap();
         let mut order_copy = order.clone();
         self.volume -= order.size;
 
         if order.callable != "" {
-            return (order, Some(order_copy.execute_order(id_t)))
+            return (order, order_copy.execute_order(id_t))
         }
 
         (order, None)

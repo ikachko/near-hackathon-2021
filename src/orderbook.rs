@@ -1,5 +1,6 @@
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
 use near_sdk::json_types::{ValidAccountId, U128};
+use near_sdk::serde_json::json;
 
 use super::level_table::LevelTable;
 use super::order::{LimitOrder, BID, ASK};
@@ -8,15 +9,15 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{
     env, near_bindgen, AccountId, PromiseOrValue,
-    serde_json, BorshStorageKey, Promise
-
+    serde_json, BorshStorageKey, Promise,
+    PromiseIndex
 };
 
 // use std::Vector;
 
 type BalanceMap = LookupMap<AccountId, u128>;
 type PendingMap = LookupMap<u128, LimitOrder>;
-type PromiseVec = Vector<Promise>;
+type PromiseIdxVec = Vector<PromiseIndex>;
 
 
 pub const A: bool = true;
@@ -128,7 +129,9 @@ impl OrderBook {
         let mut o = order.clone();
         let mut o_size = o.size;
 
-        let mut promises = PromiseVec::new(b"promises".to_vec());
+        let mut promises = PromiseIdxVec::new(b"promises".to_vec());
+
+        let mut order_promise = Promise::new(env::current_account_id());
 
         order.lock();
 
@@ -162,6 +165,8 @@ impl OrderBook {
 
                     let (mut order_m, promise) = table.get_level(price).pop(&order.id);
 
+                    order_promise = order_promise.and(promise);
+
                     order_m.lock();
 
                     self.pending.insert(
@@ -169,20 +174,19 @@ impl OrderBook {
                         &order_m
                     );
 
-                    promise.unwrap().
-                    promises.push(&promise.unwrap());
+                    // promises.push(&promise);
                 }
             }
         }
 
-        let promise_unify = env::promise_and(&promises);
+        // let promise_unify = env::promise_and(&promises.try_into());
 
         let promise_final = env::promise_then(
-            promise_unify,
-            account_id.clone(),
+            order_promise,
+            env::current_account_id(),
             "finalize",
-
-        )
+            json!({"promise_idx": order_promise.})
+        );
 
 
         if order.size > 0 {
@@ -190,8 +194,10 @@ impl OrderBook {
         }
     }
 
-    pub fn merge_promise(p_idxs: &Vector<u64>) {
+    pub fn merge_promise(promise_idx: PromiseIndex) {
         assert!(env::current_account_id() == env::predecessor_account_id());
+
+        env::promise_result();
 
         for p in self.prom
 

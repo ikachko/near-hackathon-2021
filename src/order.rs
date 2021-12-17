@@ -1,6 +1,9 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::{near_bindgen, ext_contract, AccountId, Promise};
 use near_sdk::env::{keccak256, signer_account_id};
+use near_sdk::env;
+use near_sdk::serde_json::{self, json};
+
 use serde::Serialize;
 
 pub const BID: bool = true;
@@ -73,13 +76,21 @@ impl LimitOrder {
     }
 
     pub fn execute_order(&mut self, id_t: &u128) -> Promise {
+
+        // env::promise_create(
+        //     self.callable.clone(),
+        //     b"execute",
+        //     json!({"id_m": self.id, "id_t": *id_t}).to_string().as_bytes(),
+        //     0,
+        //     5_000_000_000_000
+        // )
         ext_callable::execute(
             self.id,
             *id_t,
             &self.callable,
             0,
             5_000_000_000_000
-        )
+        ).unwrap()
     }
 
     pub fn lock(&mut self) {
