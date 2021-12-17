@@ -34,7 +34,7 @@ impl Level {
     }
 
     pub fn pop(&mut self, id_t: &u128) -> (LimitOrder, Option<Promise>) {
-        let order = self.orders.pop().unwrap();
+        let mut order = self.orders.pop().unwrap();
         self.volume -= order.size;
 
         if order.callable != "" {

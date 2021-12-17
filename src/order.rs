@@ -1,7 +1,7 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::{near_bindgen, ext_contract, AccountId, Promise};
 use near_sdk::env::{keccak256, signer_account_id};
-
+use serde::Serialize;
 
 pub const BID: bool = true;
 pub const ASK: bool = false;
@@ -12,7 +12,7 @@ trait Callable {
 }
 
 #[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize, Clone)]
+#[derive(BorshDeserialize, BorshSerialize, Clone, Serialize)]
 pub struct LimitOrder {
     pub timestamp: i128,
     pub address: String,
@@ -23,6 +23,22 @@ pub struct LimitOrder {
     pub size: u128,
     pub status: bool,
     pub pending: bool,
+}
+
+impl Default for LimitOrder {
+    fn default() -> LimitOrder {
+        LimitOrder {
+            timestamp: 0i128,
+            address: String::default(),
+            callable: String::default(),
+            id: 0u128,
+            side: bool::default(),
+            price: 0u128,
+            size: 0u128,
+            status: bool::default(),
+            pending: bool::default(),
+        }
+    }
 }
 
 #[near_bindgen]
@@ -38,7 +54,7 @@ impl LimitOrder {
         let hash = keccak256((
             c
             + &t.to_string()
-            + &p.to_string() 
+            + &p.to_string()
             + &sz.to_string()
             + &sd.to_string()
         ).as_bytes());
@@ -60,8 +76,8 @@ impl LimitOrder {
         ext_callable::execute(
             self.id,
             *id_t,
-            &self.callable, 
-            0, 
+            &self.callable,
+            0,
             5_000_000_000_000
         )
     }
