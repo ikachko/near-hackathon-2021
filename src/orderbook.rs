@@ -50,6 +50,28 @@ pub struct OrderBook {
 
 }
 
+impl Default for OrderBook {
+    fn default() -> OrderBook {
+        OrderBook {
+            tokenA_balance: BalanceMap::new(b"ta".to_vec()),
+            tokenB_balance: BalanceMap::new(b"tb".to_vec()),
+
+            tokenA_id: AccountId::default(),
+            tokenB_id: AccountId::default(),
+
+            bids: LevelTable::default(),
+            asks: LevelTable::default(),
+
+            pending: PendingMap::new(b"s".to_vec()),
+
+            max_bid: 0u128,
+            min_bid: 0u128,
+            max_ask: 0u128,
+            min_ask: 0u128,
+        }
+    }
+}
+
 pub struct Trade {
     from: AccountId,
     to: AccountId,
@@ -112,16 +134,16 @@ impl OrderBook {
 
         level_range = match !order.side {
             BID => self.max_bid..=self.min_bid,
-            ASK => self.min_ask..=self.max_ask, 
+            ASK => self.min_ask..=self.max_ask,
         };
 
         table = match !order.side {
             BID => &mut self.bids,
-            ASK => &mut self.asks, 
+            ASK => &mut self.asks,
         };
 
         self.pending.insert(&o.id, &o);
-        
+
         for price in level_range {
             if order.size == 0 {
                 return;
@@ -224,23 +246,23 @@ impl OrderBook {
     }
 
     pub fn internal_transfer(
-        &mut self, 
-        from: &AccountId, 
+        &mut self,
+        from: &AccountId,
         to: &AccountId,
-        value: &u128, 
+        value: &u128,
         token: bool
     ) {
         assert!(from != to);
 
         let token_balance = match token {
             A => &mut self.tokenA_balance,
-            B => &mut self.tokenB_balance, 
+            B => &mut self.tokenB_balance,
         };
 
-            
+
         let new_from_balance = token_balance.get(&from).unwrap() - value;
         let new_to_balance = token_balance.get(&to).unwrap() + value;
-            
+
         token_balance.insert(&from, &new_from_balance);
         token_balance.insert(&to, &new_to_balance);
     }
@@ -262,7 +284,7 @@ impl OrderBook {
             BID => self.bids.add_order(o),
             ASK => self.asks.add_order(o),
         }
-    } 
+    }
 }
 
 const ERR_FAILED_TO_PARSE_FT_ON_TRANSFER_MSG: &str = "ERR_FAILED_TO_PARSE_FT_ON_TRANSFER_MSG";

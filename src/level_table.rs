@@ -15,12 +15,21 @@ pub struct LevelTable {
     table_side: bool
 }
 
+impl Default for LevelTable {
+    fn default() -> LevelTable {
+        LevelTable {
+            table: LevelsMap::new(b"t".to_vec()),
+            table_side: bool::default(),
+        }
+    }
+}
+
 // #[near_bindgen]
 impl LevelTable {
     pub fn new(side: bool) -> Self {
         LevelTable {
             table: LevelsMap::new(env::random_seed()),
-            table_side: side, 
+            table_side: side,
         }
     }
 

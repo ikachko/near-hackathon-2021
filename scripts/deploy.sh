@@ -1,0 +1,1 @@
+near deploy --wasmFile res/orderbook.wasm --accountId $ACCOUNT
