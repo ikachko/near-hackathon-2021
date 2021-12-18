@@ -106,7 +106,9 @@ pub fn cmp(a: u128, b: u128, order: bool) -> bool {
     }
 }
 
+#[near_bindgen]
 impl OrderBook {
+    #[init]
     pub fn new(tokenA: AccountId, tokenB: AccountId) -> Self {
         OrderBook {
             tokenA_balance: BalanceMap::new(StorageKey::TokenABalance),
@@ -116,15 +118,33 @@ impl OrderBook {
             bids: LevelTable::new(BID),
             asks: LevelTable::new(ASK),
             pending: PendingMap::new(StorageKey::Pending),
-            max_bid: 0,
-            min_bid: 0,
-            max_ask: 0,
-            min_ask: 0,
+            max_bid: 100,
+            min_bid: 90,
+            max_ask: 110,
+            min_ask: 101,
         }
     }
 
-    pub fn send_order(&mut self, o: LimitOrder) {
-        self.try_match(o); // Return status
+    pub fn test_fill(&mut self, address_a: &AccountId, address_b: &AccountId) {
+        self.tokenA_balance.insert(address_a, &1_000_000_000);
+        self.tokenA_balance.insert(address_a, &1_000_000_000);
+        self.tokenB_balance.insert(address_b, &1_000_000_000);
+        self.tokenB_balance.insert(address_b, &1_000_000_000);
+    }
+
+    pub fn send_order(&mut self, side: bool, price: u128, size: u128, callable: String) {
+        self.try_match(
+            LimitOrder::new(
+                callable,
+                side,
+                price,
+                size
+            )
+        ); // Return status
+    }
+
+    pub fn send_order_raw(&mut self, mut o: LimitOrder) {
+        self.try_match(o);
     }
 
     pub fn try_match(
@@ -134,9 +154,6 @@ impl OrderBook {
         let level_range;
         let table;
         let mut o = order.clone();
-        let mut o_size = o.size;
-
-        let mut promises = PromiseIdxVec::new(b"promises".to_vec());
 
         // let mut order_promise = Promise::new(env::current_account_id());
         let mut order_promise = EMPTY_PROMISE_CHAIN;
@@ -169,7 +186,7 @@ impl OrderBook {
                 } else {
                     let matched_size = level_order.size * price;
 
-                    order.size -= matched_size;
+                    order.sub(matched_size);
 
                     let (mut order_m, promise) = table.get_level(price).pop(&order.id);
 
@@ -177,8 +194,6 @@ impl OrderBook {
                         EMPTY_PROMISE_CHAIN => promise.unwrap(),
                         _ => env::promise_and(&[order_promise, promise.unwrap()])
                     };
-
-                    order_m.lock();
 
                     self.pending.insert(
                         &order_m.id,
@@ -206,7 +221,9 @@ impl OrderBook {
         let taker_order = self.pending.get(&id_t).unwrap();
 
         if taker_order.size > 0 {
-            log!("Order {} was filled partially. Remaining size {}", taker_order.id, taker_order.size);
+            log!("Order {} was filled partially. Remaining size {}", id_t, taker_order.size);
+        } else {
+            log!("Order {} filled completely", id_t);
         }
     }
 
@@ -252,7 +269,12 @@ impl OrderBook {
                 }
             }
             order_t.size -= match_size;
+
+            log!("Order {} executed successfully", id_m);
+        } else {
+            log!("Order {} failed execution", id_m);
         }
+
         self.pending.remove(&id_m);
     }
 
@@ -296,6 +318,16 @@ impl OrderBook {
             ASK => self.asks.add_order(o),
         }
     }
+
+    // pub fn log_orderbook(&mut self) {
+    //     for idx in self.max_ask..=self.min_ask {
+    //         log!("{}", self.asks.get_level(idx));
+    //     }
+    // }
+
+    pub fn hello(&mut self) {
+        log!("HELLO");
+    }
 }
 
 const ERR_FAILED_TO_PARSE_FT_ON_TRANSFER_MSG: &str = "ERR_FAILED_TO_PARSE_FT_ON_TRANSFER_MSG";
@@ -328,5 +360,26 @@ impl FungibleTokenReceiver for OrderBook {
             }
         }
         PromiseOrValue::Value(0.into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+
+    fn test_create() {
+        let mut order_book = OrderBook::new("a.testnet".to_string(), "b.testnet".to_string());
+    
+        let mut order = LimitOrder::new(
+            "executor.testnet".to_string(),
+            BID,
+            100,
+            1
+        );
+
+        order_book.send_order_raw(order);
+
+
     }
 }

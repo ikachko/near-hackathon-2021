@@ -4,7 +4,7 @@ use near_sdk::env::{keccak256, signer_account_id};
 use near_sdk::env;
 use near_sdk::serde_json::{self, json};
 
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
 pub const BID: bool = true;
 pub const ASK: bool = false;
@@ -14,10 +14,10 @@ trait Callable {
     fn execute(id_m: u128, id_t: u128);
 }
 
-#[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize, Clone, Serialize)]
+// #[near_bindgen]
+#[derive(BorshDeserialize, BorshSerialize, Clone, Serialize, Deserialize)]
 pub struct LimitOrder {
-    pub timestamp: i128,
+    pub timestamp: u64,
     pub address: String,
     pub callable: String,
     pub id: u128,
@@ -31,7 +31,7 @@ pub struct LimitOrder {
 impl Default for LimitOrder {
     fn default() -> LimitOrder {
         LimitOrder {
-            timestamp: 0i128,
+            timestamp: 0u64,
             address: String::default(),
             callable: String::default(),
             id: 0u128,
@@ -44,16 +44,16 @@ impl Default for LimitOrder {
     }
 }
 
-#[near_bindgen]
+
 impl LimitOrder {
     pub fn new(
-        t: i128,
         c: AccountId,
         sd: bool,
         p: u128,
         sz: u128,
     ) -> Self {
         let c_copy = c.clone();
+        let t = env::block_timestamp();
         let hash = keccak256((
             c.clone()
             + &t.to_string()
@@ -75,7 +75,6 @@ impl LimitOrder {
         }
     }
 
-    // pub fn execute_order(&mut self, id_t: &u128) -> Promise {
     pub fn execute_order(&mut self, id_t: &u128) -> u64 {
         env::promise_create(
             self.callable.clone(),
@@ -84,13 +83,6 @@ impl LimitOrder {
             0,
             5_000_000_000_000
         )
-        // ext_callable::execute(
-        //     self.id,
-        //     *id_t,
-        //     &self.callable,
-        //     0,
-        //     5_000_000_000_000
-        // )
     }
 
     pub fn lock(&mut self) {

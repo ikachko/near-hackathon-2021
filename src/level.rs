@@ -1,11 +1,10 @@
-use super::order::{LimitOrder};
+use super::order::LimitOrder;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::Vector;
-use near_sdk::{env, near_bindgen, Promise};
+use near_sdk::env;
 
 type OrdersVec = Vector<LimitOrder>;
 
-#[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Level {
     pub volume: u128,
@@ -33,9 +32,8 @@ impl Level {
         self.orders.push(&order)
     }
 
-    // pub fn pop(&mut self, id_t: &u128) -> (LimitOrder, Option<Promise>) {
     pub fn pop(&mut self, id_t: &u128) -> (LimitOrder, Option<u64>) {
-        let mut order = self.orders.pop().unwrap();
+        let order = self.orders.pop().unwrap();
         let mut order_copy = order.clone();
         self.volume -= order.size;
 
